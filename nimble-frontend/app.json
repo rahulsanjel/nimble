@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Nimble",
+    "slug": "Nimble",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/nimblelogo.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "scheme": "nimble",
+    "splash": {
+      "image": "./assets/nimblelogo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F8F9FE"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourname.nimble"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/nimblelogo.png",
+        "backgroundColor": "#F8F9FE"
+      },
+      "package": "com.yourname.nimble",
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends."
+        }
+      ]
+    ]
+  }
+}
