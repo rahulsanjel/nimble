@@ -22,10 +22,31 @@ GENDER_CHOICES = (
     ("F", "Female"),
     ("O", "Other"),
 )
+ROLE_CHOICES = (
+    ("passenger", "Passenger"),
+    ("driver", "Driver"),
+)
 
 class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True)
     full_name = models.CharField(max_length=255)
+
+    # ---- Roles based ----
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default="passenger"
+    )
+    assigned_bus = models.ForeignKey(
+        'Bus',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="drivers"
+    )
+    is_on_duty = models.BooleanField(default=False)
+
+    # ----------Same Auth Fields For Passenger and Driver--------------#
     phone = models.CharField(max_length=15, blank=True, null=True)  # optional phone number
     profile_picture = models.ImageField(upload_to="profiles/", blank=True, null=True)
 

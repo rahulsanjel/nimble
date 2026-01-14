@@ -26,9 +26,16 @@ class LoginView(generics.GenericAPIView):
         )
         if user:
             refresh = RefreshToken.for_user(user)
-            return Response({
+            return Response({ 
                 "refresh": str(refresh),
                 "access": str(refresh.access_token),
+                "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "role": user.role,
+                "assigned_bus": user.assigned_bus.id if user.assigned_bus else None,
+            }
             })
         return Response({"detail": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
     
@@ -65,3 +72,20 @@ class BusLocationListView(generics.ListAPIView):
     queryset = BusLocation.objects.all()
     serializer_class = BusLocationSerializer
     permission_classes = [permissions.AllowAny]
+
+from rest_framework.permissions import BasePermission
+
+
+# Custom permission: Only driver users
+class IsDriver(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == "driver"
+
+
+class UpdateBusLocationView(generics.CreateAPIView):
+    serializer_class = BusLocationSerializer
+    permission_classes = [permissions.IsAuthenticated, IsDriver]
+
+    def perform_create(self, serializer):
+        # Use the bus assigned to the driver
+        serializer.save(bus=self.request.user.assigned_bus)

@@ -4,7 +4,8 @@ import LoginScreen from "../screens/LoginScreen";
 import SignupScreen from "../screens/SignupScreen";
 import TabNavigator from "./TabNavigator"; // Import the new tabs
 import ProfileScreen from "../screens/ProfileScreen";
-import AllRoutesScreen from "../screens/AllRoutesScreen";
+import DriverHomeScreen from "../screens/DriverHomeScreen";
+import LiveMap from "../screens/LiveMap"; 
 
 const Stack = createNativeStackNavigator();
 
@@ -19,11 +20,12 @@ export default function StackNavigator({ initialRoute }) {
       
       {/* 🔹 This is now the Tab Container */}
       <Stack.Screen name="MainTabs" component={TabNavigator} options={{ headerShown: false }} />
+      {/* 🔹 Driver Home Screen */}
+      <Stack.Screen name="DriverHome" component={DriverHomeScreen} />
       
-      {/* Keep Profile here if you want it to open full-screen (no tabs visible) */}
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="AllRoutes" component={AllRoutesScreen} />
 
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="LiveMap" component={LiveMap} />
     </Stack.Navigator>
   );
 }

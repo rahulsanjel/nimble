@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     RegisterView, LoginView,
-    StopListView, RouteListView, BusListView, BusLocationListView, UserProfileView
+    StopListView, RouteListView, BusListView, BusLocationListView, UpdateBusLocationView, UserProfileView
 )
 from rest_framework_simplejwt.views import TokenRefreshView
 from django.contrib.auth import views as auth_views
@@ -26,4 +26,7 @@ urlpatterns = [
     path('routes/', RouteListView.as_view(), name='routes'),
     path('buses/', BusListView.as_view(), name='buses'),
     path('bus-locations/', BusLocationListView.as_view(), name='bus-locations'),
+    
+    #Bus location update endpoint for drivers
+    path("bus-locations/update/", UpdateBusLocationView.as_view(), name="bus-location-update"),
 ]

@@ -22,6 +22,16 @@ class Command(BaseCommand):
             "Godawari": (27.6526, 85.3180),
             "Satdobato": (27.6718, 85.3177),
             "Tripureshwor": (27.7102, 85.3156),
+            "Pepsicola": (27.7175, 85.3120),
+            "Thimi": (27.6840, 85.3260),
+            "Kritipur": (27.6725, 85.3075),
+            "Ekantakuna": (27.6740, 85.3000),
+            "Jadibuti": (27.7070, 85.3050),
+            "New Baneshwor": (27.7120, 85.3240),
+            "Bijuli Bazar": (27.7135, 85.3190),
+            "Maitighar": (27.7160, 85.3150),
+            "Bhadrakali": (27.7180, 85.3125),
+
         }
 
         # Create stops
@@ -37,10 +47,32 @@ class Command(BaseCommand):
                 "Jamal", "Lazimpat", "Panipokhari", "Samakhusi", "New Buspark",
             ],
             "Koteshwor - Ratnapark": [
-                "Koteshwor", "Tinkune", "Samakhusi", "Jamal", "Ratnapark"
+                "Koteshwor", "Tinkune", "New Baneshwor", "Bijuli Bazar", 
+                "Maitighar", "Bhadrakali", "Ratnapark"
             ],
             "Godawari - Ratnapark": [
-                "Godawari", "Satdobato", "Jawalakhel", "Tripureshwor", "Jamal", "Ratnapark"
+                "Godawari", "Satdobato", "Jawalakhel", "Tripureshwor", "Jamal",
+                "Ratnapark"
+            ],
+            "Ratnapark - Lagankhel": [
+                "Ratnapark", "Thapathali", "Kupondole",
+                "UN Park", "Jawalakhel", "Lagankhel Buspark"
+            ],
+            "New Buspark - Koteshwor": [
+                "New Buspark", "Samakhusi", "Panipokhari", "Lazimpat",
+                "Jamal", "Thapathali", "Tinkune", "Koteshwor"
+            ],
+            "Jamal - Godawari": [
+                "Jamal", "Tripureshwor", "Jawalakhel", "Satdobato", 
+                "Godawari"
+            ],
+            "Kritipur - Ratnapark": [
+                "Kritipur", "Ekantakuna", "Satdobato", "Koteshwor", "Tinkune",
+                "New Baneshwor", "Maitighar", "Ratnapark"  
+            ],
+            "Pepsicola - Ratnapark": [
+                "Pepsicola", "Jadibuti", "Koteshwor", "Tinkune","New Baneshwor",
+                "Maitighar", "Ratnapark"
             ],
         }
 

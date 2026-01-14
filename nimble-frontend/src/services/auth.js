@@ -21,7 +21,19 @@ export const loginUser = async ({ email, password }) => {
 export const getCurrentUser = async () => {
   try {
     const response = await api.get("/auth/profile/");
-    return response.data;
+    const user = response.data;
+
+    // If the driver has an assigned bus, fetch its details
+    if (user.assigned_bus) {
+      try {
+        const busResponse = await api.get(`/buses/${user.assigned_bus}/`);
+        user.assigned_bus = busResponse.data;
+      } catch (err) {
+        console.log("Failed to fetch assigned bus:", err.response?.data || err.message);
+      }
+    }
+
+    return user;
   } catch (err) {
     console.log(
       "Get current user error:",
@@ -31,6 +43,7 @@ export const getCurrentUser = async () => {
     return null;
   }
 };
+
 
 /* ================= UPDATE PROFILE ================= */
 export const updateProfile = async (data) => {
