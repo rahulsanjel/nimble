@@ -1,29 +1,37 @@
 {
   "expo": {
     "name": "Nimble",
-    "slug": "Nimble",
+    "slug": "nimble",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/nimblelogo.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "scheme": "nimble",
     "splash": {
-      "image": "./assets/nimblelogo.png",
+      "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F8F9FE"
+      "backgroundColor": "#0D1B2A"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.yourname.nimble"
+      "bundleIdentifier": "com.rahulsharma.nimble",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Nimble needs your location to show you nearby bus stops and your position on the map."
+      }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/nimblelogo.png",
-        "backgroundColor": "#F8F9FE"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D1B2A"
       },
-      "package": "com.yourname.nimble",
-      "edgeToEdgeEnabled": true
+      "package": "com.rahulsharma.nimble",
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -32,7 +40,13 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "The app accesses your photos to let you share them with your friends."
+          "photosPermission": "Nimble accesses your photos so you can update your profile picture."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Nimble to use your location to show nearby buses and your position on the map."
         }
       ]
     ]

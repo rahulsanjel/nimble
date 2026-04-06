@@ -1,0 +1,9 @@
+Passsengers {
+    Email: 'alex@gmail.com',
+    Password: 'nimble123',
+}
+
+SuperUser/Staff {
+    Email: 'admin@admin.com',
+    Password: 'admin123',
+}

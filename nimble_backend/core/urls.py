@@ -1,32 +1,28 @@
 from django.urls import path
-from .views import (
-    RegisterView, LoginView,
-    StopListView, RouteListView, BusListView, BusLocationListView, UpdateBusLocationView, UserProfileView
-)
-from rest_framework_simplejwt.views import TokenRefreshView
-from django.contrib.auth import views as auth_views
+from . import views
 
 urlpatterns = [
     # Auth
-    path("auth/register/", RegisterView.as_view(), name="register"),
-    path("auth/login/", LoginView.as_view(), name="login"),
-    path("auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path('auth/register/', views.RegisterView.as_view(), name='register'),
+    path('auth/login/', views.LoginView.as_view(), name='login'),
+    path('auth/profile/', views.UserProfileView.as_view(), name='profile'),
+    path('auth/password-reset/', views.password_reset_request, name='password_reset'),
+    path('auth/password-reset-confirm/', views.password_reset_confirm, name='password_confirm'),
 
-    #password reset can be added here
-    path("auth/password_reset/", auth_views.PasswordResetView.as_view(), name="password_reset"),
-    path("auth/password_reset/done/", auth_views.PasswordResetDoneView.as_view(), name="password_reset_done"),
-    path("auth/reset/<uidb64>/<token>/", auth_views.PasswordResetConfirmView.as_view(), name="password_reset_confirm"),
-    path("auth/reset/done/", auth_views.PasswordResetCompleteView.as_view(), name="password_reset_complete"),
+    # Transport Data
+    path('stops/', views.StopListView.as_view(), name='stops'),
+    path('routes/', views.RouteListView.as_view(), name='routes'),
+    path('buses/', views.BusListView.as_view(), name='buses'),
+    
+    # Live Tracking
+    path('active-buses/', views.ActiveBusListView.as_view(), name='active-buses'),
+    path('driver/update-location/', views.update_live_location, name='update-location'),
+    path('driver/toggle-shift/', views.toggle_driver_shift, name='toggle-shift'),
 
-    # User Profile
-    path("auth/profile/", UserProfileView.as_view(), name="user_profile"),
-    
-    # Transport
-    path('stops/', StopListView.as_view(), name='stops'),
-    path('routes/', RouteListView.as_view(), name='routes'),
-    path('buses/', BusListView.as_view(), name='buses'),
-    path('bus-locations/', BusLocationListView.as_view(), name='bus-locations'),
-    
-    #Bus location update endpoint for drivers
-    path("bus-locations/update/", UpdateBusLocationView.as_view(), name="bus-location-update"),
+    # Trips & Payment
+    path('trips/', views.TripListView.as_view(), name='trip-history'),
+    path('trips/start/', views.start_trip, name='start-trip'),
+    path('trips/<int:trip_id>/end/', views.end_trip, name='end-trip'),
+    path('esewa/verify/', views.esewa_verify, name='esewa-verify'),
+    path('esewa/dummy-pay/', views.dummy_esewa_payment, name='dummy-pay'),
 ]

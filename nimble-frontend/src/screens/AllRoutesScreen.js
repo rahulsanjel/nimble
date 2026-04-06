@@ -1,239 +1,450 @@
-import React, { useState, useEffect } from "react";
-import { 
-  View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, ActivityIndicator, LayoutAnimation, UIManager, Platform, Dimensions, StatusBar
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity,
+  LayoutAnimation, StatusBar, RefreshControl, ActivityIndicator,
+  Animated, Dimensions, ScrollView, Platform
 } from "react-native";
-import { WebView } from "react-native-webview";
-import { getAllRoutes, toggleFavoriteRoute } from "../services/routes";
-import { Heart, ChevronDown, ChevronUp, Search, MapPinned, Clock } from "lucide-react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
+import api from "../services/api";
+import {
+  Search, ChevronLeft, ChevronDown, ChevronUp,
+  Heart, MapPin, Clock, Bus, Zap, Activity,
+  Navigation, Star, TrendingUp, Users, ArrowRight
+} from "lucide-react-native";
 
-// THEME CONSTANTS
-const PRIMARY_NAVY = "#0F172A";
-const SLATE_TEXT = "#64748B";
-const NEUTRAL_BG = "#F8FAFC";
-const ACCENT_RED = "#EF4444";
-const BORDER_COLOR = "#E2E8F0";
+const { width } = Dimensions.get("window");
 
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
+// ── Design tokens ─────────────────────────────────────────────────────────────
+const INK      = "#0D1B2A";
+const NAVY     = "#1E3A5F";
+const BLUE     = "#2563EB";
+const BLUE_S   = "#EFF6FF";
+const BLUE_M   = "#BFDBFE";
+const GREEN    = "#059669";
+const GREEN_S  = "#D1FAE5";
+const AMBER    = "#D97706";
+const AMBER_S  = "#FEF3C7";
+const RED      = "#DC2626";
+const RED_S    = "#FEE2E2";
+const SLATE    = "#64748B";
+const MUTED    = "#94A3B8";
+const BORDER   = "#E2E8F0";
+const SURFACE  = "#F8FAFC";
+const WHITE    = "#FFFFFF";
+
+const FAV_KEY  = "nimble_fav_routes";
+
+// ── Fare estimation based on stop count ──────────────────────────────────────
+const estimateFare = (stopCount) => {
+  if (!stopCount || stopCount <= 1) return "Rs. 20";
+  if (stopCount <= 4)  return "Rs. 20 – 25";
+  if (stopCount <= 8)  return "Rs. 25 – 30";
+  return "Rs. 30 – 35";
+};
+
+// ── Avg travel time based on stop count ──────────────────────────────────────
+const estimateTime = (stopCount, durationMin) => {
+  if (durationMin) return `~${durationMin} min`;
+  if (!stopCount)  return "N/A";
+  return `~${stopCount * 5} min`;
+};
+
+// ── Tag chip ─────────────────────────────────────────────────────────────────
+function Chip({ label, color, bg, icon: Icon, size = 10 }) {
+  return (
+    <View style={[styles.chip, { backgroundColor: bg }]}>
+      {Icon && <Icon size={size} color={color} />}
+      <Text style={[styles.chipTxt, { color }]}>{label}</Text>
+    </View>
+  );
 }
 
-export default function AllRoutesScreen({ navigation }) {
-  const [routes, setRoutes] = useState([]);
-  const [filteredRoutes, setFilteredRoutes] = useState([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState(null);
-  const [favorites, setFavorites] = useState([]);
+// ── Route card ────────────────────────────────────────────────────────────────
+function RouteCard({ route, activeBuses, isFav, onToggleFav, onTrack, expanded, onToggleExpand }) {
+  const expandAnim = useRef(new Animated.Value(0)).current;
+
+  const busesOnRoute = activeBuses.filter(b => b.route_name === route.name);
+  const isActive     = busesOnRoute.length > 0;
+  const stopCount    = route.stops?.length ?? 0;
 
   useEffect(() => {
-    fetchRoutes();
-  }, []);
+    Animated.timing(expandAnim, {
+      toValue: expanded ? 1 : 0,
+      duration: 260,
+      useNativeDriver: false,
+    }).start();
+  }, [expanded]);
 
-  const fetchRoutes = async () => {
-    try {
-      const data = await getAllRoutes();
-      setRoutes(data);
-      setFilteredRoutes(data);
-      const favIds = data.filter(r => r.is_favorite).map(r => r.id);
-      setFavorites(favIds);
-    } catch (err) {
-      console.log("Fetch routes error:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = (text) => {
-    setSearch(text);
-    const filtered = routes.filter(r =>
-      r.name.toLowerCase().includes(text.toLowerCase()) ||
-      r.stops.some(s => s.name.toLowerCase().includes(text.toLowerCase()))
-    );
-    setFilteredRoutes(filtered);
-  };
-
-  const handleToggleExpand = (id) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedId(expandedId === id ? null : id);
-  };
-
-  const handleToggleFavorite = async (routeId) => {
-    setFavorites(prev => prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, routeId]);
-    try { await toggleFavoriteRoute(routeId); } catch (err) { console.log(err); }
-  };
-
-  const generateLeafletHTML = (stops) => {
-    if (!stops || stops.length === 0) return "";
-    const markersJS = stops.map(s => `L.marker([${s.lat}, ${s.lng}]).addTo(map);`).join("\n");
-    const latLngs = stops.map(s => `[${s.lat}, ${s.lng}]`).join(",");
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-        <style> 
-            #map { height: 100vh; width: 100vw; } 
-            html, body { margin:0; padding:0; background: #F8FAFC; }
-            .leaflet-control-attribution { display: none !important; }
-        </style>
-      </head>
-      <body>
-        <div id="map"></div>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script>
-          var map = L.map('map', {zoomControl: false}).fitBounds([${stops.map(s => `[${s.lat},${s.lng}]`).join(",")}]);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-          ${markersJS}
-          var polyline = L.polyline([${latLngs}], {color:'${PRIMARY_NAVY}', weight: 4, opacity: 0.7}).addTo(map);
-        </script>
-      </body>
-      </html>
-    `;
-  };
-
-  const renderRoute = ({ item }) => {
-    const isExpanded = expandedId === item.id;
-    const isFavorite = favorites.includes(item.id);
-
-    return (
-      <TouchableOpacity
-        style={[styles.routeCard, isExpanded && styles.activeCard]}
-        activeOpacity={0.9}
-        onPress={() => handleToggleExpand(item.id)}
-      >
-        <View style={styles.routeHeader}>
-          <View style={styles.titleArea}>
-            <Text style={styles.routeName}>{item.name}</Text>
-            <View style={styles.badgeRow}>
-               <View style={styles.metaBadge}>
-                  <MapPinned size={12} color={SLATE_TEXT} />
-                  <Text style={styles.metaText}>{item.stops.length} Stops</Text>
-               </View>
-               <View style={styles.metaBadge}>
-                  <Clock size={12} color={SLATE_TEXT} />
-                  <Text style={styles.metaText}>{item.duration_min} min</Text>
-               </View>
-            </View>
-          </View>
-          <TouchableOpacity onPress={() => handleToggleFavorite(item.id)} style={styles.favCircle}>
-            <Heart size={20} fill={isFavorite ? ACCENT_RED : "transparent"} color={isFavorite ? ACCENT_RED : SLATE_TEXT} />
-          </TouchableOpacity>
-        </View>
-        
-        {isExpanded && (
-          <View style={styles.expandedSection}>
-            <View style={styles.divider} />
-            <Text style={styles.sectionTitle}>Route Stops</Text>
-            <View style={styles.stopsTimeline}>
-                {item.stops.map((stop, index) => (
-                <View key={stop.id} style={styles.timelineItem}>
-                    <View style={styles.timelineDot} />
-                    <Text style={styles.stopName}>{stop.name}</Text>
-                </View>
-                ))}
-            </View>
-
-            <View style={styles.mapContainer}>
-              <WebView
-                originWhitelist={['*']}
-                source={{ html: generateLeafletHTML(item.stops) }}
-                style={styles.mapPreview}
-                scrollEnabled={false}
-              />
-            </View>
-          </View>
-        )}
-
-        <View style={styles.chevronWrapper}>
-             {isExpanded ? <ChevronUp size={18} color={SLATE_TEXT} /> : <ChevronDown size={18} color={SLATE_TEXT} />}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const chevronRotate = expandAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
 
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <SafeAreaView edges={['top']}>
-        <View style={styles.header}>
-            <Text style={styles.headerTitle}>Bus Routes</Text>
-            <View style={styles.searchBox}>
-                <Search size={18} color={SLATE_TEXT} />
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Search routes or stops..."
-                    placeholderTextColor={SLATE_TEXT}
-                    value={search}
-                    onChangeText={handleSearch}
-                />
-            </View>
-        </View>
-      </SafeAreaView>
+    <View style={[styles.card, isActive && styles.cardActive]}>
+      {/* ── Active bar ── */}
+      {isActive && <View style={styles.activeBar} />}
 
-      {loading ? (
-        <ActivityIndicator size="large" color={PRIMARY_NAVY} style={{ marginTop: 50 }} />
-      ) : filteredRoutes.length === 0 ? (
-        <Text style={styles.noResult}>No routes found</Text>
-      ) : (
-        <FlatList
-          data={filteredRoutes}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={renderRoute}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-        />
+      {/* ── Header row ── */}
+      <TouchableOpacity style={styles.cardHeader} onPress={onToggleExpand} activeOpacity={0.7}>
+        <View style={styles.cardHeaderLeft}>
+          {/* Bus icon badge */}
+          <View style={[styles.routeBadge, { backgroundColor: isActive ? BLUE : SURFACE }]}>
+            <Bus size={18} color={isActive ? WHITE : SLATE} />
+            {isActive && <View style={styles.activePulseDot} />}
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.routeName} numberOfLines={1}>{route.name}</Text>
+            {/* Chips row */}
+            <View style={styles.chipsRow}>
+              {isActive
+                ? <Chip label={`${busesOnRoute.length} bus${busesOnRoute.length > 1 ? "es" : ""} live`} color={GREEN} bg={GREEN_S} icon={Activity} />
+                : <Chip label="No bus now" color={SLATE} bg={SURFACE} />
+              }
+              <Chip label={`${stopCount} stops`} color={NAVY} bg={BLUE_S} icon={MapPin} size={9} />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.cardHeaderRight}>
+          <TouchableOpacity
+            onPress={onToggleFav}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={styles.favBtn}
+          >
+            <Heart
+              size={20}
+              color={isFav ? RED : MUTED}
+              fill={isFav ? RED : "transparent"}
+            />
+          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ rotate: chevronRotate }], marginLeft: 4 }}>
+            <ChevronDown size={18} color={SLATE} />
+          </Animated.View>
+        </View>
+      </TouchableOpacity>
+
+      {/* ── Stats bar ── */}
+      <View style={styles.statsBar}>
+        <View style={styles.statItem}>
+          <Clock size={12} color={AMBER} />
+          <Text style={styles.statVal}>{estimateTime(stopCount, route.duration_min)}</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Zap size={12} color={BLUE} />
+          <Text style={styles.statVal}>{estimateFare(stopCount)}</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Bus size={12} color={isActive ? GREEN : MUTED} />
+          <Text style={[styles.statVal, { color: isActive ? GREEN : MUTED }]}>
+            {isActive ? `${busesOnRoute.length} active` : "Offline"}
+          </Text>
+        </View>
+      </View>
+
+      {/* ── Expanded stops ── */}
+      {expanded && (
+        <View style={styles.expandedBody}>
+          <View style={styles.expandDivider} />
+
+          {/* Active bus info if any */}
+          {busesOnRoute.length > 0 && (
+            <View style={styles.liveBusRow}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveBusTxt}>
+                {busesOnRoute.map(b => `Bus ${b.bus_number}`).join("  •  ")} on this route
+              </Text>
+            </View>
+          )}
+
+          <Text style={styles.stopsLabel}>STOPS</Text>
+          {route.stops?.map((stop, idx) => {
+            const isFirst = idx === 0;
+            const isLast  = idx === stopCount - 1;
+            return (
+              <View key={idx} style={styles.stopRow}>
+                <View style={styles.timeline}>
+                  <View style={[
+                    styles.dot,
+                    isFirst && { backgroundColor: BLUE,  width: 11, height: 11, borderRadius: 6 },
+                    isLast  && { backgroundColor: RED,   width: 11, height: 11, borderRadius: 6 },
+                  ]} />
+                  {!isLast && <View style={styles.connLine} />}
+                </View>
+                <View style={styles.stopTextWrap}>
+                  <Text style={[styles.stopName, (isFirst || isLast) && styles.stopNameBold]}>
+                    {stop.stop_name}
+                  </Text>
+                  {isFirst && <Text style={styles.endTag}>ORIGIN</Text>}
+                  {isLast  && <Text style={[styles.endTag, { color: RED }]}>DESTINATION</Text>}
+                </View>
+              </View>
+            );
+          })}
+
+          <TouchableOpacity style={styles.trackBtn} onPress={onTrack} activeOpacity={0.85}>
+            <Navigation size={15} color={WHITE} />
+            <Text style={styles.trackBtnTxt}>Track Live on Map</Text>
+            <ArrowRight size={14} color={WHITE} />
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   );
 }
 
+// ── Filter tabs ───────────────────────────────────────────────────────────────
+const TABS = ["All", "Active", "Saved"];
+
+// ── Main screen ───────────────────────────────────────────────────────────────
+export default function AllRoutesScreen({ navigation }) {
+  const [routes,       setRoutes]       = useState([]);
+  const [activeBuses,  setActiveBuses]  = useState([]);
+  const [favourites,   setFavourites]   = useState([]);
+  const [search,       setSearch]       = useState("");
+  const [tab,          setTab]          = useState("All");
+  const [expandedId,   setExpandedId]   = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [refreshing,   setRefreshing]   = useState(false);
+
+  // Poll active buses every 8s
+  useEffect(() => {
+    fetchAll();
+    AsyncStorage.getItem(FAV_KEY).then(raw => raw && setFavourites(JSON.parse(raw)));
+    const iv = setInterval(fetchActiveBuses, 8000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const fetchAll = async () => {
+    try {
+      const [rRes, bRes] = await Promise.all([api.get("/routes/"), api.get("/active-buses/")]);
+      setRoutes(rRes.data);
+      setActiveBuses(bRes.data);
+    } catch (e) { console.error("AllRoutes fetch:", e); }
+    finally { setLoading(false); setRefreshing(false); }
+  };
+
+  const fetchActiveBuses = async () => {
+    try {
+      const res = await api.get("/active-buses/");
+      setActiveBuses(res.data);
+    } catch (e) { console.log("Bus poll error:", e); }
+  };
+
+  const toggleFav = async (id) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    const updated = favourites.includes(id)
+      ? favourites.filter(f => f !== id)
+      : [...favourites, id];
+    setFavourites(updated);
+    await AsyncStorage.setItem(FAV_KEY, JSON.stringify(updated));
+  };
+
+  const toggleExpand = (id) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedId(prev => (prev === id ? null : id));
+  };
+
+  // ── Filtered list ──────────────────────────────────────────────────────────
+  const filtered = routes.filter(r => {
+    const q   = search.toLowerCase();
+    const hit = !q ||
+      r.name.toLowerCase().includes(q) ||
+      r.stops?.some(s => s.stop_name.toLowerCase().includes(q));
+    if (!hit) return false;
+    if (tab === "Active") return activeBuses.some(b => b.route_name === r.name);
+    if (tab === "Saved")  return favourites.includes(r.id);
+    return true;
+  });
+
+  const activeCount = routes.filter(r => activeBuses.some(b => b.route_name === r.name)).length;
+
+  if (loading) {
+    return (
+      <View style={styles.loaderWrap}>
+        <ActivityIndicator size="large" color={BLUE} />
+        <Text style={styles.loaderTxt}>Loading routes…</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+
+      {/* ── Header ── */}
+      <SafeAreaView edges={["top"]} style={{ backgroundColor: WHITE }}>
+        <View style={styles.header}>
+          <View style={styles.headerTop}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+              <ChevronLeft size={24} color={INK} />
+            </TouchableOpacity>
+            <View>
+              <Text style={styles.headerTitle}>Bus Network</Text>
+              <Text style={styles.headerSub}>{activeCount} routes active now</Text>
+            </View>
+            <View style={styles.liveIndicator}>
+              <View style={styles.liveDot} />
+              <Text style={styles.liveTxt}>Live</Text>
+            </View>
+          </View>
+
+          {/* Search */}
+          <View style={styles.searchWrap}>
+            <Search size={16} color={SLATE} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search routes or stops…"
+              placeholderTextColor={MUTED}
+              value={search}
+              onChangeText={setSearch}
+              returnKeyType="search"
+            />
+            {!!search && (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <Text style={{ color: BLUE, fontWeight: "700", fontSize: 13 }}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Tabs */}
+          <View style={styles.tabs}>
+            {TABS.map(t => (
+              <TouchableOpacity
+                key={t}
+                style={[styles.tabBtn, tab === t && styles.tabBtnActive]}
+                onPress={() => setTab(t)}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.tabTxt, tab === t && styles.tabTxtActive]}>{t}</Text>
+                {t === "Active" && (
+                  <View style={styles.tabBadge}>
+                    <Text style={styles.tabBadgeTxt}>{activeCount}</Text>
+                  </View>
+                )}
+                {t === "Saved" && favourites.length > 0 && (
+                  <View style={[styles.tabBadge, { backgroundColor: RED }]}>
+                    <Text style={styles.tabBadgeTxt}>{favourites.length}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </SafeAreaView>
+
+      {/* ── List ── */}
+      <FlatList
+        data={filtered}
+        keyExtractor={item => item.id.toString()}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor={BLUE} />
+        }
+        renderItem={({ item }) => (
+          <RouteCard
+            route={item}
+            activeBuses={activeBuses}
+            isFav={favourites.includes(item.id)}
+            onToggleFav={() => toggleFav(item.id)}
+            onTrack={() => navigation.navigate("LiveMap", { selectedRoute: item })}
+            expanded={expandedId === item.id}
+            onToggleExpand={() => toggleExpand(item.id)}
+          />
+        )}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Bus size={40} color={MUTED} />
+            <Text style={styles.emptyTxt}>
+              {tab === "Saved" ? "No saved routes yet.\nTap ♥ on any route to save it." :
+               tab === "Active" ? "No buses are active right now." :
+               "No routes match your search."}
+            </Text>
+          </View>
+        }
+      />
+    </View>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: NEUTRAL_BG },
-  header: { paddingHorizontal: 20, paddingTop: 10, paddingBottom: 15 },
-  headerTitle: { fontSize: 24, fontWeight: "800", color: PRIMARY_NAVY, marginBottom: 15 },
-  searchBox: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#FFF', 
-    paddingHorizontal: 15, 
-    height: 50, 
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  searchInput: { flex: 1, marginLeft: 10, fontSize: 15, color: PRIMARY_NAVY, fontWeight: "500" },
-  listContent: { paddingHorizontal: 20, paddingBottom: 120 },
-  routeCard: {
-    backgroundColor: "#FFF",
-    padding: 16,
-    borderRadius: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  activeCard: { borderColor: PRIMARY_NAVY, borderWidth: 1.5 },
-  routeHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: 'flex-start' },
-  titleArea: { flex: 1 },
-  routeName: { fontSize: 17, fontWeight: "800", color: PRIMARY_NAVY, marginBottom: 6 },
-  badgeRow: { flexDirection: 'row', gap: 8 },
-  metaBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: NEUTRAL_BG, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, gap: 4 },
-  metaText: { fontSize: 11, color: SLATE_TEXT, fontWeight: "700" },
-  favCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: NEUTRAL_BG, alignItems: 'center', justifyContent: 'center' },
-  expandedSection: { marginTop: 15 },
-  divider: { height: 1, backgroundColor: BORDER_COLOR, marginBottom: 15 },
-  sectionTitle: { fontSize: 14, fontWeight: "800", color: PRIMARY_NAVY, marginBottom: 12 },
-  stopsTimeline: { paddingLeft: 10, marginBottom: 15 },
-  timelineItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  timelineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: PRIMARY_NAVY, marginRight: 12 },
-  stopName: { fontSize: 13, color: SLATE_TEXT, fontWeight: "500" },
-  mapContainer: { width: "100%", height: 180, borderRadius: 16, overflow: "hidden", marginTop: 8, borderWidth: 1, borderColor: BORDER_COLOR },
-  mapPreview: { flex: 1 },
-  chevronWrapper: { alignSelf: 'center', marginTop: 10 },
-  noResult: { textAlign: "center", marginTop: 50, fontSize: 15, color: SLATE_TEXT, fontWeight: "600" },
+  root:          { flex: 1, backgroundColor: SURFACE },
+  loaderWrap:    { flex: 1, justifyContent: "center", alignItems: "center", gap: 12 },
+  loaderTxt:     { color: SLATE, fontWeight: "600" },
+
+  // Header
+  header:        { paddingHorizontal: 20, paddingBottom: 16, paddingTop: 8, backgroundColor: WHITE },
+  headerTop:     { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  backBtn:       { width: 38, height: 38, borderRadius: 12, backgroundColor: SURFACE, justifyContent: "center", alignItems: "center" },
+  headerTitle:   { fontSize: 20, fontWeight: "900", color: INK, letterSpacing: -0.5 },
+  headerSub:     { fontSize: 12, color: SLATE, fontWeight: "500", marginTop: 1 },
+  liveIndicator: { marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: GREEN_S, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  liveDot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: GREEN },
+  liveTxt:       { fontSize: 11, fontWeight: "800", color: GREEN },
+
+  searchWrap:    { flexDirection: "row", alignItems: "center", backgroundColor: SURFACE, borderRadius: 14, paddingHorizontal: 14, height: 46, gap: 10, borderWidth: 1, borderColor: BORDER, marginBottom: 14 },
+  searchInput:   { flex: 1, fontSize: 14, color: INK, fontWeight: "500" },
+
+  tabs:          { flexDirection: "row", gap: 8 },
+  tabBtn:        { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: SURFACE, borderWidth: 1, borderColor: BORDER },
+  tabBtnActive:  { backgroundColor: INK, borderColor: INK },
+  tabTxt:        { fontSize: 13, fontWeight: "700", color: SLATE },
+  tabTxtActive:  { color: WHITE },
+  tabBadge:      { backgroundColor: GREEN, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 },
+  tabBadgeTxt:   { fontSize: 9, fontWeight: "800", color: WHITE },
+
+  // List
+  list:          { padding: 16, paddingBottom: 40 },
+
+  // Card
+  card:          { backgroundColor: WHITE, borderRadius: 20, marginBottom: 14, borderWidth: 1, borderColor: BORDER, overflow: "hidden", elevation: 2, shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
+  cardActive:    { borderColor: BLUE_M },
+  activeBar:     { height: 3, backgroundColor: BLUE },
+
+  cardHeader:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, paddingBottom: 0 },
+  cardHeaderLeft:{ flexDirection: "row", alignItems: "center", flex: 1, gap: 12 },
+  cardHeaderRight:{ flexDirection: "row", alignItems: "center", gap: 2 },
+
+  routeBadge:    { width: 44, height: 44, borderRadius: 14, justifyContent: "center", alignItems: "center", position: "relative" },
+  activePulseDot:{ position: "absolute", top: 7, right: 7, width: 8, height: 8, borderRadius: 4, backgroundColor: GREEN, borderWidth: 1.5, borderColor: WHITE },
+
+  routeName:     { fontSize: 15, fontWeight: "800", color: INK, marginBottom: 5 },
+  chipsRow:      { flexDirection: "row", gap: 6, flexWrap: "wrap" },
+  chip:          { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  chipTxt:       { fontSize: 10, fontWeight: "700" },
+  favBtn:        { padding: 6 },
+
+  // Stats bar
+  statsBar:      { flexDirection: "row", alignItems: "center", padding: 12, paddingHorizontal: 16, marginTop: 10, borderTopWidth: 1, borderTopColor: BORDER },
+  statItem:      { flexDirection: "row", alignItems: "center", gap: 5, flex: 1, justifyContent: "center" },
+  statVal:       { fontSize: 11, fontWeight: "700", color: SLATE },
+  statDivider:   { width: 1, height: 16, backgroundColor: BORDER },
+
+  // Expanded
+  expandedBody:  { paddingHorizontal: 16, paddingBottom: 16 },
+  expandDivider: { height: 1, backgroundColor: BORDER, marginVertical: 14 },
+
+  liveBusRow:    { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: GREEN_S, borderRadius: 10, padding: 10, marginBottom: 14 },
+  liveBusTxt:    { fontSize: 12, fontWeight: "700", color: GREEN },
+
+  stopsLabel:    { fontSize: 10, fontWeight: "900", color: MUTED, letterSpacing: 1.2, marginBottom: 12 },
+
+  stopRow:       { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  timeline:      { width: 16, alignItems: "center", paddingTop: 2 },
+  dot:           { width: 8, height: 8, borderRadius: 4, backgroundColor: BORDER, zIndex: 2 },
+  connLine:      { width: 2, height: 36, backgroundColor: BORDER, marginTop: 2 },
+  stopTextWrap:  { flex: 1, paddingBottom: 24 },
+  stopName:      { fontSize: 13, fontWeight: "500", color: SLATE },
+  stopNameBold:  { fontWeight: "800", color: INK },
+  endTag:        { fontSize: 9, fontWeight: "800", color: BLUE, marginTop: 2, letterSpacing: 0.5 },
+
+  trackBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: INK, borderRadius: 14, paddingVertical: 14, marginTop: 8 },
+  trackBtnTxt:   { color: WHITE, fontWeight: "800", fontSize: 14 },
+
+  // Empty
+  empty:         { alignItems: "center", paddingTop: 80, gap: 14 },
+  emptyTxt:      { fontSize: 14, color: MUTED, fontWeight: "600", textAlign: "center", lineHeight: 22 },
 });

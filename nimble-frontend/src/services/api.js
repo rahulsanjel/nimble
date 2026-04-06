@@ -1,8 +1,15 @@
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// ✅ Add /api at the end of your ngrok link
+const BASE_URL = "https://zena-stalky-tenuously.ngrok-free.dev/api"; 
+
 const api = axios.create({
-  baseURL: "http://10.0.2.2:8000/api/",
+  baseURL: BASE_URL,
+  timeout: 15000,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 /* ================= REQUEST INTERCEPTOR ================= */
@@ -34,44 +41,44 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If token expired
-    if (
-      error.response?.status === 401 &&
-      !originalRequest._retry
-    ) {
-      originalRequest._retry = true;
-
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject });
-        }).then((token) => {
-          originalRequest.headers.Authorization = `Bearer ${token}`;
-          return api(originalRequest);
-        });
+        })
+          .then((token) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            return api(originalRequest);
+          })
+          .catch((err) => Promise.reject(err));
       }
 
+      originalRequest._retry = true;
       isRefreshing = true;
 
       try {
-        const refresh = await AsyncStorage.getItem("refresh_token");
-        if (!refresh) throw new Error("No refresh token");
+        const refreshToken = await AsyncStorage.getItem("refresh_token");
+        if (!refreshToken) throw new Error("No refresh token available");
 
-        const response = await axios.post(
-          "http://10.0.2.2:8000/api/auth/token/refresh/",
-          { refresh }
-        );
+        // Using the static BASE_URL ensures we stay on the 10.0.2.2 bridge
+        const response = await axios.post(`${BASE_URL}/auth/token/refresh/`, {
+          refresh: refreshToken,
+        });
 
-        const newAccessToken = response.data.access;
-
-        await AsyncStorage.setItem("access_token", newAccessToken);
-        api.defaults.headers.Authorization = `Bearer ${newAccessToken}`;
-
-        processQueue(null, newAccessToken);
+        const newAccess = response.data.access; 
+        await AsyncStorage.setItem("access_token", newAccess);
+  
+        processQueue(null, newAccess);
+        
+        originalRequest.headers.Authorization = `Bearer ${newAccess}`;
         return api(originalRequest);
-      } catch (err) {
-        processQueue(err, null);
+        
+      } catch (refreshError) {
+        processQueue(refreshError, null);
         await AsyncStorage.multiRemove(["access_token", "refresh_token"]);
-        return Promise.reject(err);
+        console.log("Session expired, please login again.");
+        return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }

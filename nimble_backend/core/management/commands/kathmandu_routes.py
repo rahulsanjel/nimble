@@ -1,94 +1,81 @@
+import random
 from django.core.management.base import BaseCommand
-from core.models import Stop, Route, Bus
+from core.models import Stop, Route, RouteStop, Bus
 
 class Command(BaseCommand):
-    help = "Seed Kathmandu routes with more realistic data"
+    help = "Seed 10 linear Kathmandu routes for two-way simulation"
 
     def handle(self, *args, **options):
-        # Define stops with approximate lat/lng
-        stops_data = {
-            "Lagankhel Buspark": (27.6679, 85.3209),
-            "Jawalakhel": (27.6686, 85.3211),
-            "Kupandole": (27.6731, 85.3222),
-            "Thapathali": (27.7035, 85.3108),
-            "Jamal": (27.7090, 85.3100),
-            "Lazimpat": (27.7216, 85.3214),
-            "Panipokhari": (27.7300, 85.3208),
-            "Samakhusi": (27.7311, 85.3137),
-            "New Buspark": (27.7420, 85.3218),
-            "Koteshwor": (27.7050, 85.3330),
-            "Tinkune": (27.7115, 85.3250),
-            "Ratnapark": (27.7150, 85.3140),
-            "Godawari": (27.6526, 85.3180),
-            "Satdobato": (27.6718, 85.3177),
-            "Tripureshwor": (27.7102, 85.3156),
-            "Pepsicola": (27.7175, 85.3120),
-            "Thimi": (27.6840, 85.3260),
-            "Kritipur": (27.6725, 85.3075),
-            "Ekantakuna": (27.6740, 85.3000),
-            "Jadibuti": (27.7070, 85.3050),
-            "New Baneshwor": (27.7120, 85.3240),
-            "Bijuli Bazar": (27.7135, 85.3190),
-            "Maitighar": (27.7160, 85.3150),
-            "Bhadrakali": (27.7180, 85.3125),
+        self.stdout.write("Seeding Kathmandu Transit Data...")
 
+        stops_data = {
+            "Ratnapark": (27.7064, 85.3149),
+            "Lagankhel Buspark": (27.6674, 85.3218),
+            "New Buspark (Gongabu)": (27.7345, 85.3115),
+            "Kalanki": (27.6938, 85.2817),
+            "Koteshwor": (27.6774, 85.3486),
+            "Chabahil": (27.7174, 85.3444),
+            "Tribhuvan Airport": (27.6984, 85.3591),
+            "Balkhu": (27.6845, 85.2925),
+            "Narayan Gopal Chowk": (27.7351, 85.3312),
+            "Sukedhara": (27.7275, 85.3435),
+            "Boudha": (27.7215, 85.3620),
+            "Jorpati": (27.7225, 85.3765),
+            "Sankhu": (27.7320, 85.4610),
+            "Budhanilkantha": (27.7780, 85.3610),
+            "Sama Khusi": (27.7300, 85.3180),
+            "Satdobato": (27.6620, 85.3260),
+            "Ekantakuna": (27.6675, 85.3080),
+            "Jawalakhel": (27.6740, 85.3150),
+            "Swayambhu": (27.7125, 85.2855),
+            "Balaju": (27.7305, 85.3015),
+            "Thankot": (27.6850, 85.2050),
+            "Pharping": (27.6140, 85.2750),
+            "New Baneshwor": (27.6915, 85.3331),
+            "Maitighar": (27.6939, 85.3215),
+            "Tripureshwor": (27.6945, 85.3125),
+            "Teku": (27.6970, 85.3030),
+            "Kamalpokhari": (27.7095, 85.3265),
+            "Bhaktapur Dudhpati": (27.6720, 85.4280),
+            "Thamel": (27.7145, 85.3110),
+            "Lainchaur": (27.7170, 85.3140),
+            "Lazimpat": (27.7230, 85.3200),
         }
 
-        # Create stops
+        # Create/Update Stops
         stops = {}
         for name, (lat, lng) in stops_data.items():
-            stop, _ = Stop.objects.get_or_create(name=name, lat=lat, lng=lng)
+            stop, _ = Stop.objects.update_or_create(name=name, defaults={'lat': lat, 'lng': lng})
             stops[name] = stop
 
-        # Define routes & sequences
-        routes = {
-            "Lagankhel - New Buspark": [
-                "Lagankhel Buspark", "Jawalakhel", "Kupandole", "Thapathali",
-                "Jamal", "Lazimpat", "Panipokhari", "Samakhusi", "New Buspark",
-            ],
-            "Koteshwor - Ratnapark": [
-                "Koteshwor", "Tinkune", "New Baneshwor", "Bijuli Bazar", 
-                "Maitighar", "Bhadrakali", "Ratnapark"
-            ],
-            "Godawari - Ratnapark": [
-                "Godawari", "Satdobato", "Jawalakhel", "Tripureshwor", "Jamal",
-                "Ratnapark"
-            ],
-            "Ratnapark - Lagankhel": [
-                "Ratnapark", "Thapathali", "Kupondole",
-                "UN Park", "Jawalakhel", "Lagankhel Buspark"
-            ],
-            "New Buspark - Koteshwor": [
-                "New Buspark", "Samakhusi", "Panipokhari", "Lazimpat",
-                "Jamal", "Thapathali", "Tinkune", "Koteshwor"
-            ],
-            "Jamal - Godawari": [
-                "Jamal", "Tripureshwor", "Jawalakhel", "Satdobato", 
-                "Godawari"
-            ],
-            "Kritipur - Ratnapark": [
-                "Kritipur", "Ekantakuna", "Satdobato", "Koteshwor", "Tinkune",
-                "New Baneshwor", "Maitighar", "Ratnapark"  
-            ],
-            "Pepsicola - Ratnapark": [
-                "Pepsicola", "Jadibuti", "Koteshwor", "Tinkune","New Baneshwor",
-                "Maitighar", "Ratnapark"
-            ],
+        # Route Definitions (Linear)
+        routes_dict = {
+            "Ring Road Sector": ["Kalanki", "Swayambhu", "Balaju", "New Buspark (Gongabu)", "Narayan Gopal Chowk", "Sukedhara", "Chabahil", "Koteshwor", "Satdobato", "Balkhu"],
+            "Ratnapark - Sankhu": ["Ratnapark", "Kamalpokhari", "Chabahil", "Boudha", "Jorpati", "Sankhu"],
+            "Lagankhel - Gongabu": ["Lagankhel Buspark", "Jawalakhel", "Tripureshwor", "Ratnapark", "Lainchaur", "Lazimpat", "Sama Khusi", "New Buspark (Gongabu)"],
+            "Thankot - Ratnapark": ["Thankot", "Kalanki", "Balkhu", "Teku", "Tripureshwor", "Ratnapark"],
+            "Airport Shuttle": ["Ratnapark", "Maitighar", "New Baneshwor", "Tribhuvan Airport"],
+            "Budhanilkantha Line": ["Ratnapark", "Lainchaur", "Lazimpat", "Narayan Gopal Chowk", "Budhanilkantha"],
+            "Bhaktapur Express": ["Ratnapark", "Maitighar", "New Baneshwor", "Koteshwor", "Bhaktapur Dudhpati"],
+            "Patan - Chabahil": ["Lagankhel Buspark", "Satdobato", "Koteshwor", "Chabahil"],
+            "Pharping - Ratnapark": ["Pharping", "Balkhu", "Teku", "Tripureshwor", "Ratnapark"],
+            "Balaju - Ratnapark": ["Balaju", "Sama Khusi", "Lainchaur", "Thamel", "Ratnapark"],
         }
 
-        # Create routes and assign stops
-        for route_name, stop_list in routes.items():
-            route_obj, _ = Route.objects.get_or_create(name=route_name, duration_min=len(stop_list)*5)
-            route_obj.stops.set([stops[s] for s in stop_list])
-            route_obj.save()
+        for route_name, stop_list in routes_dict.items():
+            route_obj, _ = Route.objects.get_or_create(name=route_name, defaults={'duration_min': len(stop_list) * 8})
+            
+            # Reset Route mapping
+            RouteStop.objects.filter(route=route_obj).delete()
+            for idx, stop_name in enumerate(stop_list):
+                RouteStop.objects.create(route=route_obj, stop=stops[stop_name], order=idx)
 
-            # Create a couple of buses for each route
-            for i in range(1, 3):
+            # Create 3 Buses per route
+            for i in range(1, 4):
                 Bus.objects.get_or_create(
-                    number=f"{route_name[:3].upper()}-{i:02}",
+                    number=f"BA-{route_name[:2].upper()}-{random.randint(1000, 9999)}",
                     route=route_obj,
-                    capacity=40,
-                    active=True
+                    defaults={'capacity': 40, 'active': True}
                 )
 
-        self.stdout.write(self.style.SUCCESS("Realistic Kathmandu routes seeded successfully."))
+        self.stdout.write(self.style.SUCCESS("Database seeded successfully!"))
